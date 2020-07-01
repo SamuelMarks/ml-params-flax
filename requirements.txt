@@ -1,4 +1,6 @@
 flax
 jax
 jaxlib
+tensorflow
+tensorflow_datasets
 http://github.com/SamuelMarks/ml-params/zipball/master#egg=ml_params
