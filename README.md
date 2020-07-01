@@ -1,7 +1,8 @@
 ml_params_flax
 ==============
-![Python version range](https://img.shields.io/badge/python-2.7%E2%80%933.6+-blue.svg)
+![Python version range](https://img.shields.io/badge/python-3.5%E2%80%933.6+-blue.svg)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![CI for Linux](https://github.com/SamuelMarks/ml-params-flax/workflows/main/badge.svg)](https://github.com/SamuelMarks/ml-params-flax/actions)
 
 Flax—atop JAX—implementation of ml-params CLI API
 
