@@ -10,6 +10,9 @@ import yaml
 __author__ = 'Samuel Marks'
 __version__ = '0.0.1'
 
+mpl_logger = logging.getLogger('matplotlib')
+mpl_logger.setLevel(logging.WARNING)
+
 
 def get_logger(name=None):
     with open(path.join(path.dirname(__file__), '_data', 'logging.yml'), 'rt') as f:
