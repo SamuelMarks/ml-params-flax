@@ -44,15 +44,18 @@ class FlaxTrainer(BaseTrainer):
         :return: Dataset splits (by default, your train and test)
         :rtype: ```Tuple[tf.data.Dataset, tf.data.Dataset] or Tuple[np.ndarray, np.ndarray]```
         """
+        if data_loader_kwargs is None:
+            data_loader_kwargs = {}
+        data_loader_kwargs['as_numpy'] = True
         self.data = super(FlaxTrainer, self).load_data(dataset_name=dataset_name,
                                                        data_loader=data_loader,
                                                        data_loader_kwargs=data_loader_kwargs,
                                                        data_type=data_type,
                                                        output_type=output_type,
-                                                       K=jnp)
+                                                       K=FlaxTrainer.K)
         assert self.data is not None and len(self.data) >= 2
 
-    def train(self, epochs=10, batch_size=32, train_ds=None, test_ds=None, model_dir=None, learning_rate=0.1,
+    def train(self, epochs=10, batch_size=128, train_ds=None, test_ds=None, model_dir=None, learning_rate=0.1,
               momentum=0.9, *args,
               **kwargs):
         super(FlaxTrainer, self).train(epochs=epochs, *args, **kwargs)

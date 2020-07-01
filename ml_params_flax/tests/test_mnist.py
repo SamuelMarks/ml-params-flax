@@ -1,4 +1,5 @@
 from shutil import rmtree
+from os import path
 from tempfile import mkdtemp
 from unittest import TestCase, main as unittest_main
 
@@ -11,12 +12,12 @@ class TestMnist(TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        TestMnist.tensorflow_datasets_dir = mkdtemp('tensorflow_datasets')
-        TestMnist.model_dir = mkdtemp('model_dir')
+        TestMnist.tensorflow_datasets_dir = path.join(path.expanduser('~'), 'tensorflow_datasets')
+        TestMnist.model_dir = mkdtemp('_model_dir')
 
     @classmethod
     def tearDownClass(cls) -> None:
-        rmtree(TestMnist.tensorflow_datasets_dir)
+        # rmtree(TestMnist.tensorflow_datasets_dir)
         rmtree(TestMnist.model_dir)
 
     def test_mnist(self) -> None:
