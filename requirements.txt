@@ -1,2 +1,4 @@
 flax
+jax
+jaxlib
 http://github.com/SamuelMarks/ml-params/zipball/master#egg=ml_params
