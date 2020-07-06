@@ -1,4 +1,5 @@
 """ Implementation of ml_params API """
+from sys import stdout
 
 import jax.numpy as jnp
 from flax.metrics import tensorboard
@@ -12,13 +13,11 @@ logging = get_logger('ml_params_flax')
 
 
 class FlaxTrainer(BaseTrainer):
-    """ Implementation of ml_params BaseTrainer for Trax """
-    data = None
-    K = jnp
+    """ Implementation of ml_params BaseTrainer for Flax """
 
     def load_data(self, dataset_name, data_loader=None,
-                  data_loader_kwargs=None, data_type='infer',
-                  output_type=None, K=None):
+                  data_type='infer', output_type=None, K=jnp,
+                  as_numpy=False, **data_loader_kwargs):
         """
         Load the data for your ML pipeline. Will be fed into `train`.
 
@@ -29,9 +28,6 @@ class FlaxTrainer(BaseTrainer):
          Defaults to TensorFlow Datasets and ml_prepare combined one.
         :type data_loader: ```None or (*args, **kwargs) -> tf.data.Datasets or Any```
 
-        :param data_loader_kwargs: pass this as arguments to data_loader function
-        :type data_loader_kwargs: ```None or dict```
-
         :param data_type: incoming data type, defaults to 'infer'
         :type data_type: ```str```
 
@@ -41,34 +37,89 @@ class FlaxTrainer(BaseTrainer):
         :param K: backend engine, e.g., `np` or `tf`
         :type K: ```None or np or tf or Any```
 
+        :param as_numpy: Convert output to numpy
+        :type as_numpy: ```bool```
+
+        :param data_loader_kwargs: pass this as arguments to data_loader function
+        :type data_loader_kwargs: ```**data_loader_kwargs```
+
         :return: Dataset splits (by default, your train and test)
         :rtype: ```Tuple[tf.data.Dataset, tf.data.Dataset] or Tuple[np.ndarray, np.ndarray]```
         """
-        if data_loader_kwargs is None:
-            data_loader_kwargs = {}
-        data_loader_kwargs['as_numpy'] = True
+        data_loader_kwargs['as_numpy'] = as_numpy
         self.data = super(FlaxTrainer, self).load_data(dataset_name=dataset_name,
                                                        data_loader=data_loader,
-                                                       data_loader_kwargs=data_loader_kwargs,
                                                        data_type=data_type,
                                                        output_type=output_type,
-                                                       K=FlaxTrainer.K)
+                                                       K=K,
+                                                       **data_loader_kwargs)
         assert self.data is not None and len(self.data) >= 2
 
-    def train(self, epochs=10, batch_size=128, train_ds=None, test_ds=None, model_dir=None, learning_rate=0.1,
-              momentum=0.9, *args,
-              **kwargs):
-        super(FlaxTrainer, self).train(epochs=epochs, *args, **kwargs)
-        assert self.data is not None and len(self.data) >= 2
-        assert batch_size is not None
-        assert model_dir is not None
+    def train(self, callbacks, epochs, loss, metrics, metric_emit_freq, optimizer,
+              save_directory, output_type='infer', writer=stdout,
+              batch_size=128, learning_rate=0.1, momentum=0.9,
+              *args, **kwargs):
+        """
+        Run the training loop for your ML pipeline.
 
-        if train_ds is None or test_ds is None:
-            train_ds, test_ds = self.data[0], self.data[1]
+        :param callbacks: Collection of callables that are run inside the training loop
+        :type callbacks: ```None or List[Callable] or Tuple[Callable]```
+
+        :param epochs: number of epochs (must be greater than 0)
+        :type epochs: ```int```
+
+        :param loss: Loss function, can be a string (depending on the framework) or an instance of a class
+        :type loss: ```str or Callable or Any```
+
+        :param metrics: Collection of metrics to monitor, e.g., accuracy, f1
+        :type metrics: ```None or List[Callable or str] or Tuple[Callable or str]```
+
+        :param metric_emit_freq: Frequency of metric emission, e.g., `lambda: epochs % 10 == 0`, defaults to every epoch
+        :type metric_emit_freq: ```None or (*args, **kwargs) -> bool```
+
+        :param optimizer: Optimizer, can be a string (depending on the framework) or an instance of a class
+        :type callbacks: ```str or Callable or Any```
+
+        :param save_directory: Directory to save output in, e.g., weights in h5 files. If None, don't save.
+        :type save_directory: ```None or str```
+
+        :param output_type: `if save_directory is not None` then save in this format, e.g., 'h5'.
+        :type output_type: ```str```
+
+        :param writer: Writer for all output, could be a TensorBoard instance, a file handler like stdout or stderr
+        :type writer: ```stdout or Any```
+
+        :param batch_size:
+        :type batch_size: ```int```
+
+        :param learning_rate:
+        :type learning_rate: ```float```
+
+        :param momentum:
+        :type momentum: ```float```
+
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        super(FlaxTrainer, self).train(callbacks=callbacks,
+                                       epochs=epochs,
+                                       loss=loss,
+                                       metrics=metrics,
+                                       metric_emit_freq=metric_emit_freq,
+                                       optimizer=optimizer,
+                                       save_directory=save_directory,
+                                       output_type=output_type,
+                                       writer=writer,
+                                       *args, **kwargs)
+        assert self.data is not None
+        assert self.model is not None
+
+        train_ds, test_ds = self.data[0], self.data[1]
 
         rng = random.PRNGKey(0)
 
-        summary_writer = tensorboard.SummaryWriter(model_dir)
+        summary_writer = tensorboard.SummaryWriter(save_directory)
 
         rng, init_rng = random.split(rng)
         model = create_model(init_rng)
@@ -79,12 +130,13 @@ class FlaxTrainer(BaseTrainer):
             optimizer, train_metrics = train_epoch(
                 optimizer, train_ds, batch_size, epoch, input_rng)
             loss, accuracy = eval_model(optimizer.target, test_ds)
-            logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
-                         epoch, loss, accuracy * 100)
-            summary_writer.scalar('train_loss', train_metrics['loss'], epoch)
-            summary_writer.scalar('train_accuracy', train_metrics['accuracy'], epoch)
-            summary_writer.scalar('eval_loss', loss, epoch)
-            summary_writer.scalar('eval_accuracy', accuracy, epoch)
+            if metric_emit_freq(epoch):
+                logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
+                             epoch, loss, accuracy * 100)
+                summary_writer.scalar('train_loss', train_metrics['loss'], epoch)
+                summary_writer.scalar('train_accuracy', train_metrics['accuracy'], epoch)
+                summary_writer.scalar('eval_loss', loss, epoch)
+                summary_writer.scalar('eval_accuracy', accuracy, epoch)
         summary_writer.flush()
         return optimizer
 
