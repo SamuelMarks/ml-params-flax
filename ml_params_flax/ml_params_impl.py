@@ -2,18 +2,21 @@
 from sys import stdout
 
 import jax.numpy as jnp
+from flax import optim
 from flax.metrics import tensorboard
 from jax import random
 from ml_params.base import BaseTrainer
 
 from ml_params_flax import get_logger
-from ml_params_flax.train import create_model, create_optimizer, train_epoch, eval_model
+from ml_params_flax.train import train_epoch, eval_model
 
 logging = get_logger('ml_params_flax')
 
 
 class FlaxTrainer(BaseTrainer):
     """ Implementation of ml_params BaseTrainer for Flax """
+
+    rng = None  # type: None or jnp.ndarray
 
     def load_data(self, dataset_name, data_loader=None,
                   data_type='infer', output_type=None, K=jnp,
@@ -54,6 +57,30 @@ class FlaxTrainer(BaseTrainer):
                                                        K=K,
                                                        **data_loader_kwargs)
         assert self.data is not None and len(self.data) >= 2
+
+    def load_model(self, model, call=False, rng=random.PRNGKey(0), **model_kwargs):
+        """
+        Load the model. Takes a model object, or a pipeline that downloads & configures before returning a model object.
+
+        :param model: model object, e.g., a tf.keras.Sequential, tl.Serial,  nn.Module instance
+
+        :param call: call `model()` even if `len(model_kwargs) == 0`
+        :type call: ```bool```
+
+        :param rng: random number generator
+        :type rng: ```jnp.ndarray```
+
+        :param \**model_kwargs: to be passed into the model. If empty, doesn't call, unless call=True.
+           to be passed into the model. If empty, doesn't call, unless call=True.
+
+        :return self.model, e.g., the result of applying `model_kwargs` on model
+
+        :Keyword Arguments:
+            * *num_classes* (``int``) --
+              Number of classes
+        """
+        super(FlaxTrainer, self).load_model(model=model, call=call, **model_kwargs)
+        self.rng = rng
 
     def train(self, callbacks, epochs, loss, metrics, metric_emit_freq, optimizer,
               save_directory, output_type='infer', writer=stdout,
@@ -112,21 +139,19 @@ class FlaxTrainer(BaseTrainer):
                                        output_type=output_type,
                                        writer=writer,
                                        *args, **kwargs)
-        assert self.data is not None
+        assert self.data is not None and len(self.data) >= 2
         assert self.model is not None
+        assert self.rng is not None
 
         train_ds, test_ds = self.data[0], self.data[1]
 
-        rng = random.PRNGKey(0)
-
         summary_writer = tensorboard.SummaryWriter(save_directory)
 
-        rng, init_rng = random.split(rng)
-        model = create_model(init_rng)
-        optimizer = create_optimizer(model, learning_rate, momentum)
+        if optimizer is None:
+            optimizer = optim.Momentum(learning_rate=learning_rate, beta=momentum).create(self.model)
 
         for epoch in range(1, epochs + 1):
-            rng, input_rng = random.split(rng)
+            rng, input_rng = random.split(self.rng)
             optimizer, train_metrics = train_epoch(
                 optimizer, train_ds, batch_size, epoch, input_rng)
             loss, accuracy = eval_model(optimizer.target, test_ds)

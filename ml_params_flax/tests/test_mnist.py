@@ -3,6 +3,9 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from unittest import TestCase, main as unittest_main
 
+from jax import random
+
+from ml_params_flax.example_model import create_model
 from ml_params_flax.ml_params_impl import FlaxTrainer
 
 
@@ -21,11 +24,14 @@ class TestMnist(TestCase):
         rmtree(TestMnist.model_dir)
 
     def test_mnist(self) -> None:
+        rng = random.PRNGKey(0)
+
         trainer = FlaxTrainer()
         trainer.load_data('mnist', tfds_dir=TestMnist.tfds_dir)
-        trainer.load_model('TODO')
-        trainer.train(epochs=3, model_dir=TestMnist.model_dir, loss=None, callbacks=None, optimizer=None,
-                      metrics=None, metric_emit_freq=lambda epoch: True, save_directory=TestMnist.model_dir)
+        trainer.load_model(create_model, rng=rng, key=random.split(rng)[1])
+        trainer.train(epochs=3, model_dir=TestMnist.model_dir, loss=None,
+                      callbacks=None, optimizer=None, metrics=None,
+                      metric_emit_freq=lambda epoch: True, save_directory=TestMnist.model_dir)
 
 
 if __name__ == '__main__':

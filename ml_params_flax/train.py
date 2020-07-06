@@ -25,7 +25,7 @@ from sys import modules
 import jax
 import jax.numpy as jnp
 import numpy as onp
-from flax import nn, optim
+from flax import nn
 from jax import random
 
 from ml_params_flax import get_logger
@@ -49,18 +49,6 @@ class CNN(nn.Module):
         x = nn.Dense(x, features=10)
         x = nn.log_softmax(x)
         return x
-
-
-def create_model(key):
-    _, initial_params = CNN.init_by_shape(key, [((1, 28, 28, 1), jnp.float32)])
-    model = nn.Model(CNN, initial_params)
-    return model
-
-
-def create_optimizer(model, learning_rate, beta):
-    optimizer_def = optim.Momentum(learning_rate=learning_rate, beta=beta)
-    optimizer = optimizer_def.create(model)
-    return optimizer
 
 
 def onehot(labels, num_classes=10):
