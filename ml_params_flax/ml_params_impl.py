@@ -16,11 +16,12 @@ logging = get_logger('ml_params_flax')
 class FlaxTrainer(BaseTrainer):
     """ Implementation of ml_params BaseTrainer for Flax """
 
+    K = jnp
     rng = None  # type: None or jnp.ndarray
 
     def load_data(self, dataset_name, data_loader=None,
-                  data_type='infer', output_type=None, K=jnp,
-                  as_numpy=False, **data_loader_kwargs):
+                  data_type='infer', output_type='numpy', K=None,
+                  **data_loader_kwargs):
         """
         Load the data for your ML pipeline. Will be fed into `train`.
 
@@ -40,21 +41,18 @@ class FlaxTrainer(BaseTrainer):
         :param K: backend engine, e.g., `np` or `tf`
         :type K: ```None or np or tf or Any```
 
-        :param as_numpy: Convert output to numpy
-        :type as_numpy: ```bool```
-
         :param data_loader_kwargs: pass this as arguments to data_loader function
         :type data_loader_kwargs: ```**data_loader_kwargs```
 
         :return: Dataset splits (by default, your train and test)
         :rtype: ```Tuple[tf.data.Dataset, tf.data.Dataset] or Tuple[np.ndarray, np.ndarray]```
         """
-        data_loader_kwargs['as_numpy'] = as_numpy
+        data_loader_kwargs['as_numpy'] = output_type == 'numpy'
         self.data = super(FlaxTrainer, self).load_data(dataset_name=dataset_name,
                                                        data_loader=data_loader,
                                                        data_type=data_type,
                                                        output_type=output_type,
-                                                       K=K,
+                                                       K=FlaxTrainer.K,
                                                        **data_loader_kwargs)
         assert self.data is not None and len(self.data) >= 2
 
@@ -153,7 +151,8 @@ class FlaxTrainer(BaseTrainer):
         for epoch in range(1, epochs + 1):
             rng, input_rng = random.split(self.rng)
             optimizer, train_metrics = train_epoch(
-                optimizer, train_ds, batch_size, epoch, input_rng)
+                optimizer, train_ds, batch_size, epoch, input_rng
+            )
             loss, accuracy = eval_model(optimizer.target, test_ds)
             if metric_emit_freq(epoch):
                 logging.info('eval epoch: %d, loss: %.4f, accuracy: %.2f',
